@@ -9,6 +9,7 @@ env:
   ECR_REPO: lks-employee-app
   EB_APP_NAME: lks-eb-apps-test
   S3_BUCKET: lks-dockerimage-test-25
+  EB_ENV_NAME: lks-eb-apps-test-env
   AWS_ACCOUNT_ID: 834549009763
   S3_KEY: app.zip
 
