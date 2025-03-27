@@ -36,45 +36,43 @@ jobs:
           docker tag $ECR_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
           docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
 
-      - name: Generate Dockerrun.aws.json (v3)
+      - name: Generate Dockerrun.aws.json (v1)
         run: |
           echo '{
-            "AWSEBDockerrunVersion": 3,
-            "ContainerDefinitions": [
+            "AWSEBDockerrunVersion": "1",
+            "Image": {
+              "Name": "'$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPO':latest",
+              "Update": "true"
+            },
+            "Ports": [
               {
-                "Name": "lks-employee-app",
-                "Image": "'$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPO':latest",
-                "Essential": true,
-                "PortMappings": [
-                  {
-                    "ContainerPort": 8000,
-                    "HostPort": 8000
-                  }
-                ]
+                "ContainerPort": 8000
               }
             ]
           }' > Dockerrun.aws.json
 
       - name: Zip Dockerrun.aws.json
-        run: zip app.zip Dockerrun.aws.json
+        run: |
+          ZIP_FILE="app-$(date +%Y%m%d)-${{ github.run_number }}.zip"
+          echo "ZIP_FILE=$ZIP_FILE" >> $GITHUB_ENV
+          zip $ZIP_FILE Dockerrun.aws.json
 
       - name: Upload to S3
         run: |
-          S3_KEY="app-$(date +%Y%m%d)-${{ github.run_number }}.zip"
-          echo "S3_KEY=$S3_KEY" >> $GITHUB_ENV
-          aws s3 cp app.zip s3://$S3_BUCKET/$S3_KEY
+          aws s3 cp $ZIP_FILE s3://$S3_BUCKET/$ZIP_FILE
+          echo "S3_KEY=$ZIP_FILE" >> $GITHUB_ENV
 
       - name: Create Application Version
         run: |
           VERSION_LABEL="v-$(date +%Y%m%d)-${{ github.run_number }}"
+          echo "VERSION_LABEL=$VERSION_LABEL" >> $GITHUB_ENV
           aws elasticbeanstalk create-application-version \
             --application-name ${{ env.EB_APP_NAME }} \
             --version-label $VERSION_LABEL \
-            --source-bundle S3Bucket=${{ env.S3_BUCKET }},S3Key=$S3_KEY
+            --source-bundle S3Bucket=${{ env.S3_BUCKET }},S3Key=${{ env.S3_KEY }}
 
       - name: Update Environment
         run: |
-          VERSION_LABEL="v-$(date +%Y%m%d)-${{ github.run_number }}"
           aws elasticbeanstalk update-environment \
             --environment-name ${{ env.EB_ENV_NAME }} \
-            --version-label $VERSION_LABEL
+            --version-label ${{ env.VERSION_LABEL }}
