@@ -8,7 +8,7 @@ import os
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://abcd1234.execute-api.region.amazonaws.com/prod")
+API_BASE_URL = os.getenv("API_BASE_URL")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
