@@ -56,16 +56,18 @@ jobs:
       - name: Upload to S3
         run: aws s3 cp app.zip s3://$S3_BUCKET/app.zip
 
-      - name: Create New Application Version
+      - name: Create Application Version
         run: |
+          VERSION_LABEL="v-$(date +%Y%m%d)-${{ github.run_number }}"
           aws elasticbeanstalk create-application-version \
-            --application-name $EB_APP_NAME \
-            --version-label v-${{ github.run_number }} \
-            --source-bundle S3Bucket=$S3_BUCKET,S3Key=app.zip
+            --application-name ${{ env.EB_APP_NAME }} \
+            --version-label $VERSION_LABEL \
+            --source-bundle S3Bucket=${{ env.S3_BUCKET }},S3Key=${{ env.S3_KEY }}
 
       - name: Update Environment
         run: |
+          VERSION_LABEL="v-$(date +%Y%m%d)-${{ github.run_number }}"
           aws elasticbeanstalk update-environment \
-            --application-name $EB_APP_NAME \
-            --environment-name $EB_APP_NAME-env \
-            --version-label v-${{ github.run_number }}
+            --environment-name ${{ env.EB_ENV_NAME }} \
+            --version-label $VERSION_LABEL
+
