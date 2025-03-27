@@ -1,0 +1,71 @@
+name: LKS CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPO: lks-employee-app
+  EB_APP_NAME: lks-eb-apps-test
+  S3_BUCKET: lks-dockerimage-test-25
+  AWS_ACCOUNT_ID: 834549009763
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t $ECR_REPO .
+          docker tag $ECR_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
+
+      - name: Generate Dockerrun.aws.json
+        run: |
+          echo '{
+            "AWSEBDockerrunVersion": 1,
+            "Image": {
+              "Name": "'$AWS_ACCOUNT_ID'.dkr.ecr.'$AWS_REGION'.amazonaws.com/'$ECR_REPO':latest",
+              "Update": "true"
+            },
+            "Ports": [
+              {
+                "ContainerPort": "8000"
+              }
+            ]
+          }' > Dockerrun.aws.json
+
+      - name: Zip Dockerrun.aws.json
+        run: zip app.zip Dockerrun.aws.json
+
+      - name: Upload to S3
+        run: aws s3 cp app.zip s3://$S3_BUCKET/app.zip
+
+      - name: Create New Application Version
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name $EB_APP_NAME \
+            --version-label v-${{ github.run_number }} \
+            --source-bundle S3Bucket=$S3_BUCKET,S3Key=app.zip
+
+      - name: Update Environment
+        run: |
+          aws elasticbeanstalk update-environment \
+            --application-name $EB_APP_NAME \
+            --environment-name $EB_APP_NAME-env \
+            --version-label v-${{ github.run_number }}
